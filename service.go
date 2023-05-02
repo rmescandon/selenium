@@ -131,6 +131,14 @@ func JavaPath(path string) ServiceOption {
 	}
 }
 
+// V4 specifies that selenium server is v4 compliant
+func V4() ServiceOption {
+	return func(s *Service) error {
+		s.v4 = true
+		return nil
+	}
+}
+
 // HTMLUnit specifies the path to the JAR for the HTMLUnit driver (compiled
 // with its dependencies).
 //
@@ -157,6 +165,8 @@ type Service struct {
 	htmlUnitPath              string
 
 	output io.Writer
+
+	v4 bool
 }
 
 // FrameBuffer returns the FrameBuffer if one was started by the service and nil otherwise.
@@ -173,20 +183,36 @@ func NewSeleniumService(jarPath string, port int, opts ...ServiceOption) (*Servi
 	if s.javaPath != "" {
 		s.cmd.Path = s.javaPath
 	}
-	if s.geckoDriverPath != "" {
-		s.cmd.Args = append([]string{"java", "-Dwebdriver.gecko.driver=" + s.geckoDriverPath}, s.cmd.Args[1:]...)
-	}
-	if s.chromeDriverPath != "" {
-		s.cmd.Args = append([]string{"java", "-Dwebdriver.chrome.driver=" + s.chromeDriverPath}, s.cmd.Args[1:]...)
-	}
-
 	var classpath []string
 	if s.htmlUnitPath != "" {
 		classpath = append(classpath, s.htmlUnitPath)
 	}
-	classpath = append(classpath, jarPath)
-	s.cmd.Args = append(s.cmd.Args, "-cp", strings.Join(classpath, ":"))
-	s.cmd.Args = append(s.cmd.Args, "org.openqa.grid.selenium.GridLauncherV3", "-port", strconv.Itoa(port), "-debug")
+
+	if s.v4 {
+		if s.geckoDriverPath != "" {
+			classpath = append(classpath, s.geckoDriverPath)
+		}
+		if s.chromeDriverPath != "" {
+			classpath = append(classpath, s.chromeDriverPath)
+		}
+
+		s.cmd.Args = append(s.cmd.Args, "-jar", jarPath)
+		if len(classpath) > 0 {
+			s.cmd.Args = append(s.cmd.Args, "--ext", strings.Join(classpath, ":"))
+		}
+		s.cmd.Args = append(s.cmd.Args, "standalone", "--port", strconv.Itoa(port))
+	} else {
+		if s.geckoDriverPath != "" {
+			s.cmd.Args = append([]string{"java", "-Dwebdriver.gecko.driver=" + s.geckoDriverPath}, s.cmd.Args[1:]...)
+		}
+		if s.chromeDriverPath != "" {
+			s.cmd.Args = append([]string{"java", "-Dwebdriver.chrome.driver=" + s.chromeDriverPath}, s.cmd.Args[1:]...)
+		}
+
+		classpath = append(classpath, jarPath)
+		s.cmd.Args = append(s.cmd.Args, "-cp", strings.Join(classpath, ":"))
+		s.cmd.Args = append(s.cmd.Args, "org.openqa.grid.selenium.GridLauncherV3", "-port", strconv.Itoa(port), "-debug")
+	}
 
 	if err := s.start(port); err != nil {
 		return nil, err
