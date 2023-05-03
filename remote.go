@@ -93,6 +93,17 @@ type serverReply struct {
 	Error
 }
 
+type StackItem struct {
+	FileName        string  `json:"fileName"`
+	ModuleVersion   *string `json:"moduleVersion"`
+	ModuleName      *string `json:"moduleName"`
+	NativeMethod    bool    `json:"nativeMethod"`
+	MethodName      string  `json:"methodName"`
+	ClassName       string  `json:"className"`
+	LineNumber      int     `json:"lineNumber"`
+	ClassLoaderName *string `json:"classLoaderName"`
+}
+
 // Error contains information about a failure of a command. See the table of
 // these strings at https://www.w3.org/TR/webdriver/#handling-errors .
 //
@@ -104,7 +115,7 @@ type Error struct {
 	// Message is a detailed, human-readable message specific to the failure.
 	Message string `json:"message"`
 	// Stacktrace may contain the server-side stacktrace where the error occurred.
-	Stacktrace string `json:"stacktrace"`
+	Stacktrace []StackItem `json:"stacktrace"`
 	// HTTPCode is the HTTP status code returned by the server.
 	HTTPCode int
 	// LegacyCode is the "Response Status Code" defined in the legacy Selenium
@@ -460,9 +471,11 @@ func (wd *remoteWD) NewSession() (string, error) {
 			}
 			return "", err
 		}
+
 		if reply.Status != 0 && i < len(attempts) {
 			continue
 		}
+
 		if reply.SessionID != nil {
 			wd.id = *reply.SessionID
 		}
@@ -495,10 +508,14 @@ func (wd *remoteWD) NewSession() (string, error) {
 				// Legacy implementations returned most data directly in the "values"
 				// key.
 				returnedCapabilities
-			}{}
 
+				Error
+			}{}
 			if err := json.Unmarshal(reply.Value, &value); err != nil {
-				return "", fmt.Errorf("error unmarshalling value: %v", err)
+				return "", fmt.Errorf("error unmarshalling value: %s", err)
+			}
+			if len(value.Err) > 0 {
+				return "", errors.New(value.Message)
 			}
 			if value.SessionID != "" && wd.id == "" {
 				wd.id = value.SessionID

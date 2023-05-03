@@ -139,6 +139,14 @@ func V4() ServiceOption {
 	}
 }
 
+// SessionRequestTimeout specifies the timeout it takes to discard a session request
+func SessionRequestTimeout(seconds int) ServiceOption {
+	return func(s *Service) error {
+		s.sessionRequestTimeout = seconds
+		return nil
+	}
+}
+
 // HTMLUnit specifies the path to the JAR for the HTMLUnit driver (compiled
 // with its dependencies).
 //
@@ -166,7 +174,8 @@ type Service struct {
 
 	output io.Writer
 
-	v4 bool
+	v4                    bool
+	sessionRequestTimeout int
 }
 
 // FrameBuffer returns the FrameBuffer if one was started by the service and nil otherwise.
@@ -201,6 +210,9 @@ func NewSeleniumService(jarPath string, port int, opts ...ServiceOption) (*Servi
 			s.cmd.Args = append(s.cmd.Args, "--ext", strings.Join(classpath, ":"))
 		}
 		s.cmd.Args = append(s.cmd.Args, "standalone", "--port", strconv.Itoa(port))
+		if s.sessionRequestTimeout > 0 {
+			s.cmd.Args = append(s.cmd.Args, "--session-request-timeout", strconv.Itoa(s.sessionRequestTimeout))
+		}
 	} else {
 		if s.geckoDriverPath != "" {
 			s.cmd.Args = append([]string{"java", "-Dwebdriver.gecko.driver=" + s.geckoDriverPath}, s.cmd.Args[1:]...)
